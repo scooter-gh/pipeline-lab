@@ -1,0 +1,39 @@
+services:
+  ministack:
+    image: ministackorg/ministack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      PERSIST_STATE: 1
+      STATE_DIR: /data/ministack-state
+      DOCKER_NETWORK: pipeline-net
+    volumes:
+      - ./ministack-data:/data
+    networks:
+      - pipeline-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_ministack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  github-runner:
+    image: myoung34/github-runner:latest
+    depends_on:
+      ministack:
+        condition: service_healthy
+    environment:
+      RUNNER_NAME: pipeline-lab-runner
+      REPO_URL: https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}
+      RUNNER_TOKEN: ${GITHUB_RUNNER_TOKEN}
+      RUNNER_WORKDIR: /tmp/runner-work
+      LABELS: self-hosted,linux,pipeline-lab
+      DISABLE_AUTO_UPDATE: "true"
+    volumes:
+      - ./runner/.runner-data:/home/runner/.runner-data
+    networks:
+      - pipeline-net
+
+networks:
+  pipeline-net:
+    driver: bridge

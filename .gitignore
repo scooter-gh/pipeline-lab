@@ -1,0 +1,7 @@
+.env
+runner/.runner-data/
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+ministack-data/
