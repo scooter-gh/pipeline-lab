@@ -156,7 +156,6 @@ resource "aws_iam_role" "platform_app" {
       }
     ]
   })
-  permissions_boundary = aws_iam_policy.boundary.arn
 
   tags = {
     Environment         = "local"

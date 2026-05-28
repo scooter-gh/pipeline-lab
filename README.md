@@ -42,30 +42,26 @@ git push -u origin dev
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                          Docker Host                             │
-│                                                                  │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐ │
-│  │  MiniStack prod  │  │  MiniStack dev   │  │ GitHub Runner  │ │
-│  │  :4566           │  │  :4567→4566      │  │ (self-hosted)  │ │
-│  └────────┬────────┘  └────────┬────────┘  └───────┬────────┘ │
-│           │                    │                    │           │
-│           │   pipeline-net (bridge)                 │           │
-│           │◀────────────────────▶◀──────────────────▶           │
-│                                                                  │
-│  ┌─────────────────┐  ┌─────────────────┐                       │
-│  │ StackPort prod  │  │ StackPort dev   │                       │
-│  │ :8080           │  │ :8081           │                       │
-│  └─────────────────┘  └─────────────────┘                       │
-└──────────────────────────────────────────────────────────────────┘
-        │                              ▲
-        │  Push to dev or main        │  Polls for jobs
-        ▼                              │
-   ┌──────────┐              ┌──────────────────┐
-   │ GitHub   │              │ GitHub Actions    │
-   │ Repo     │──────────────│ Service           │
-   └──────────┘              └──────────────────┘
+```mermaid
+graph TB
+  subgraph Docker["Docker Host — pipeline-net (bridge)"]
+    MP["MiniStack prod<br/>:4566"]
+    MD["MiniStack dev<br/>:4567"]
+    GR["GitHub Runner<br/>(self-hosted)"]
+    SP["StackPort prod<br/>:8080"]
+    SD["StackPort dev<br/>:8081"]
+  end
+
+  GH["GitHub Repo"]
+  GA["GitHub Actions Service"]
+
+  GH -- "push to dev" --> GA
+  GH -- "push to main" --> GA
+  GA -- "dispatches jobs" --> GR
+  GR -- "terraform apply<br/>(dev)" --> MD
+  GR -- "terraform apply<br/>(prod, after approval)" --> MP
+  SP -. "UI" .-> MP
+  SD -. "UI" .-> MD
 ```
 
 - **`dev` branch** → auto plan + apply against `ministack-dev:4566`
