@@ -17,6 +17,9 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    s3 = "http://ministack:4566"
+    s3       = "http://ministack:4566"
+    dynamodb  = "http://ministack:4566"
+    iam       = "http://ministack:4566"
+    sts       = "http://ministack:4566"
   }
 }

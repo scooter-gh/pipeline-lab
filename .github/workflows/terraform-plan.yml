@@ -17,6 +17,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Reset MiniStack state
+        run: curl -X POST http://ministack:4566/_ministack/reset
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
