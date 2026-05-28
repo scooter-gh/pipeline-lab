@@ -3,25 +3,29 @@ export
 
 COMPOSE = docker compose
 GITHUB_API = https://api.github.com
+TF_IMAGE = hashicorp/terraform:1.9
+TF_NET = pipeline-lab_pipeline-net
 
-.PHONY: up down destroy status logs ui help
+.PHONY: up down destroy status logs ui ui-dev bootstrap help
 
 help:
 	@echo ""
 	@echo "pipeline-lab targets:"
-	@echo "  make up       Start all containers (MiniStack + runner + UI)"
-	@echo "  make down     Stop containers, preserve state"
-	@echo "  make destroy  Deregister runner, remove containers + volumes + state"
-	@echo "  make status   Show running container status"
-	@echo "  make logs     Tail all container logs"
-	@echo "  make ui       Open MiniStack dashboard in browser"
+	@echo "  make up         Start all containers (prod + dev MiniStack, runner, UIs)"
+	@echo "  make down       Stop containers, preserve state"
+	@echo "  make destroy    Deregister runner, remove containers + volumes + state"
+	@echo "  make bootstrap  Create tfstate buckets in both MiniStack instances"
+	@echo "  make status     Show running container status"
+	@echo "  make logs        Tail all container logs"
+	@echo "  make ui         Open prod MiniStack dashboard in browser"
+	@echo "  make ui-dev     Open dev MiniStack dashboard in browser"
 	@echo ""
 
 up:
 	@echo "Starting pipeline-lab..."
 	$(COMPOSE) up -d
-	@echo "Waiting for MiniStack to be healthy..."
-	$(COMPOSE) wait ministack
+	@echo "Waiting for MiniStack services to be healthy..."
+	$(COMPOSE) wait ministack ministack-dev
 	@echo "pipeline-lab is up."
 
 down:
@@ -48,9 +52,26 @@ destroy:
 	$(COMPOSE) down -v --remove-orphans
 	@echo "Removing MiniStack state..."
 	rm -rf ./ministack-data
+	rm -rf ./ministack-data-dev
 	@echo "Removing runner data..."
 	rm -rf ./runner/.runner-data
 	@echo "Destroy complete."
+
+bootstrap:
+	@echo "Bootstrapping prod state bucket (ministack:4566)..."
+	docker run --rm --network $(TF_NET) \
+		-v $$(pwd)/bootstrap:/workspace -w /workspace \
+		$(TF_IMAGE) init -backend=false
+	docker run --rm --network $(TF_NET) \
+		-v $$(pwd)/bootstrap:/workspace -w /workspace \
+		-e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_DEFAULT_REGION=us-east-1 \
+		$(TF_IMAGE) apply -auto-approve -var="ministack_endpoint=http://ministack:4566"
+	@echo "Bootstrapping dev state bucket (ministack-dev:4566)..."
+	docker run --rm --network $(TF_NET) \
+		-v $$(pwd)/bootstrap:/workspace -w /workspace \
+		-e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_DEFAULT_REGION=us-east-1 \
+		$(TF_IMAGE) apply -auto-approve -var="ministack_endpoint=http://ministack-dev:4566"
+	@echo "Bootstrap complete."
 
 status:
 	$(COMPOSE) ps
@@ -60,3 +81,6 @@ logs:
 
 ui:
 	xdg-open http://localhost:8080
+
+ui-dev:
+	xdg-open http://localhost:8081

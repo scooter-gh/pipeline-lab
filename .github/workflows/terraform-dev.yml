@@ -1,12 +1,12 @@
-name: Terraform Prod
+name: Terraform Dev
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
   workflow_dispatch:
 
 jobs:
-  plan:
+  deploy:
     runs-on: [self-hosted, linux, pipeline-lab]
 
     defaults:
@@ -23,7 +23,7 @@ jobs:
           terraform_version: "~1.9"
 
       - name: Terraform Init
-        run: terraform init -backend-config=backends/prod.hcl -reconfigure
+        run: terraform init -backend-config=backends/dev.hcl -reconfigure
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
@@ -36,39 +36,14 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -var="ministack_endpoint=http://ministack:4566"
-        env:
-          AWS_ACCESS_KEY_ID: test
-          AWS_SECRET_ACCESS_KEY: test
-          AWS_DEFAULT_REGION: us-east-1
-
-  apply:
-    needs: plan
-    runs-on: [self-hosted, linux, pipeline-lab]
-    environment: production
-
-    defaults:
-      run:
-        working-directory: terraform
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "~1.9"
-
-      - name: Terraform Init
-        run: terraform init -backend-config=backends/prod.hcl -reconfigure
+        run: terraform plan -var="ministack_endpoint=http://ministack-dev:4566"
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           AWS_DEFAULT_REGION: us-east-1
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var="ministack_endpoint=http://ministack:4566"
+        run: terraform apply -auto-approve -var="ministack_endpoint=http://ministack-dev:4566"
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test

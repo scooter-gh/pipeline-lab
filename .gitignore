@@ -5,3 +5,4 @@ runner/.runner-data/
 *.tfstate.backup
 .terraform.lock.hcl
 ministack-data/
+ministack-data-dev/
