@@ -1,2 +1,2 @@
-key      = "dev/terraform.tfstate"
-endpoint = "http://ministack-dev:4566"
+key         = "dev/terraform.tfstate"
+endpoints   = { s3 = "http://ministack-dev:4566" }
