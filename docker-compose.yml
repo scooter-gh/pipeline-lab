@@ -18,7 +18,7 @@ services:
       retries: 10
 
   github-runner:
-    image: myoung34/github-runner:latest
+    build: ./runner
     depends_on:
       ministack:
         condition: service_healthy
