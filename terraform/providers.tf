@@ -17,9 +17,14 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    dynamodb = "http://ministack:4566"
-    iam      = "http://ministack:4566"
-    s3       = "http://ministack:4566"
-    sts      = "http://ministack:4566"
+    cloudtrail     = "http://ministack:4566"
+    dynamodb       = "http://ministack:4566"
+    ec2            = "http://ministack:4566"
+    iam            = "http://ministack:4566"
+    kms            = "http://ministack:4566"
+    logs           = "http://ministack:4566"
+    s3             = "http://ministack:4566"
+    secretsmanager = "http://ministack:4566"
+    sts            = "http://ministack:4566"
   }
 }
