@@ -43,25 +43,31 @@ git push -u origin dev
 ## Architecture
 
 ```mermaid
-graph TB
-  subgraph Docker["Docker Host — pipeline-net (bridge)"]
-    MP["MiniStack prod<br/>:4566"]
-    MD["MiniStack dev<br/>:4567"]
-    GR["GitHub Runner<br/>(self-hosted)"]
-    SP["StackPort prod<br/>:8080"]
-    SD["StackPort dev<br/>:8081"]
+flowchart LR
+  subgraph GH["GitHub"]
+    Repo["Repo"]
+    Actions["Actions"]
   end
 
-  GH["GitHub Repo"]
-  GA["GitHub Actions Service"]
+  subgraph Docker["Docker Host"]
+    Runner["Self-hosted Runner"]
+    subgraph Prod["Prod"]
+      MSP["MiniStack :4566"]
+      UIP["StackPort :8080"]
+    end
+    subgraph Dev["Dev"]
+      MSD["MiniStack :4567"]
+      UID["StackPort :8081"]
+    end
+  end
 
-  GH -- "push to dev" --> GA
-  GH -- "push to main" --> GA
-  GA -- "dispatches jobs" --> GR
-  GR -- "terraform apply<br/>(dev)" --> MD
-  GR -- "terraform apply<br/>(prod, after approval)" --> MP
-  SP -. "UI" .-> MP
-  SD -. "UI" .-> MD
+  Repo -- "push to dev" --> Actions
+  Repo -- "push to main" --> Actions
+  Actions -- "job" --> Runner
+  Runner -- "auto apply" --> MSD
+  Runner -- "apply after approval" --> MSP
+  UIP -.-> MSP
+  UID -.-> MSD
 ```
 
 - **`dev` branch** → auto plan + apply against `ministack-dev:4566`
