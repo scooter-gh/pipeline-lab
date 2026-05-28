@@ -6,15 +6,14 @@ A fully containerized local DevSecOps pipeline — a GitHub Actions self-hosted 
 
 - **Docker** (running and accessible without `sudo`)
 - **GitHub repo** named `pipeline-lab`
-- **GitHub Runner Registration Token** (from repo Settings → Actions → Runners → New self-hosted runner)
-- **GitHub PAT** (fine-grained, repo-scoped, with Administration: Read and Write for runner deregistration)
+- **GitHub PAT** (fine-grained, repo-scoped, with Administration: Read and Write) — used to auto-generate runner registration tokens; no manual token management required
 
 ## Quickstart
 
 ```bash
 # 1. Copy the env template and fill in real values
 cp .env.template .env
-# Edit .env — set GITHUB_RUNNER_TOKEN, GITHUB_PAT, GITHUB_OWNER
+# Edit .env — set GITHUB_PAT and GITHUB_OWNER
 
 # 2. Start all containers
 make up
@@ -44,46 +43,68 @@ git push -u origin dev
 
 ```mermaid
 flowchart LR
-  subgraph GH["GitHub"]
-    Repo["Repo"]
-    Actions["Actions"]
+  subgraph Internet["Internet / GitHub Cloud"]
+    GHRepo["Source Repository<br/>main / dev branches"]
+    GHActions["GitHub Actions Service<br/>CI/CD Orchestration"]
   end
 
-  subgraph Docker["Docker Host"]
-    Runner["Self-hosted Runner"]
-    subgraph Prod["Prod"]
-      MSP["MiniStack :4566"]
-      UIP["StackPort :8080"]
+  subgraph Host["Docker Host — pipeline-net"]
+    subgraph CICD["CI/CD Layer"]
+      Runner["Self-Hosted Runner<br/>GitHub Actions Executor"]
     end
-    subgraph Dev["Dev"]
-      MSD["MiniStack :4567"]
-      UID["StackPort :8081"]
+
+    subgraph ProdEnv["Production Environment"]
+      ProdAPI["MiniStack API<br/>:4566 — AWS Service Emulation"]
+      ProdState[("S3 State Backend<br/>prod/terraform.tfstate")]
+      ProdUI["StackPort Dashboard<br/>:8080 — Observability UI"]
+      ProdAudit["CloudTrail + Audit Logs"]
+    end
+
+    subgraph DevEnv["Development Environment"]
+      DevAPI["MiniStack API<br/>:4567 — AWS Service Emulation"]
+      DevState[("S3 State Backend<br/>dev/terraform.tfstate")]
+      DevUI["StackPort Dashboard<br/>:8081 — Observability UI"]
     end
   end
 
-  Repo -- "push to dev" --> Actions
-  Repo -- "push to main" --> Actions
-  Actions -- "job" --> Runner
-  Runner -- "auto apply" --> MSD
-  Runner -- "apply after approval" --> MSP
-  UIP -.-> MSP
-  UID -.-> MSD
+  GHRepo -- "push triggers" --> GHActions
+  GHActions -- "dispatches jobs" --> Runner
+  Runner -- "auto plan + apply" --> DevAPI
+  Runner -- "plan → approval gate → apply" --> ProdAPI
+  ProdAPI --- ProdState
+  DevAPI --- DevState
+  ProdAPI --- ProdAudit
+  ProdUI -. "visualizes" .-> ProdAPI
+  DevUI -. "visualizes" .-> DevAPI
 ```
 
 - **`dev` branch** → auto plan + apply against `ministack-dev:4566`
 - **`main` branch** → plan, then manual approval gate, then apply against `ministack:4566` (prod)
+- **StackPort** dashboards provide a web UI to inspect MiniStack resources (S3 buckets, DynamoDB tables, IAM roles, etc.)
 
 State is isolated: dev state in `dev/terraform.tfstate`, prod state in `prod/terraform.tfstate`, both stored in the `pipeline-lab-tfstate` S3 bucket within their respective MiniStack instance.
 
 MiniStack emulates S3, DynamoDB, IAM, STS, KMS, CloudTrail, EC2, CloudWatch Logs, Secrets Manager, and more.
 
-## Phase I Scope
+## Infrastructure Controls
 
-- Credentials are hardcoded in Terraform provider config (test keys only, safe for local dev)
-- Terraform resources: VPC, private subnets, security group, S3 + DynamoDB VPC endpoints, KMS key, IAM role with permission boundary, S3 audit bucket with versioning + public access block, CloudTrail trail
-- Vault integration for secrets management is planned for Phase II
+Terraform resources map to FedRAMP-adjacent control families:
+
+| Control Family | Resources | Coverage |
+|----------------|-----------|----------|
+| **AC-2, AC-6** Access Control | IAM role, permission boundary policy, inline policy, S3 public access block | Least-privilege role with scoped trust policy and documented max permissions |
+| **AU-2, AU-3** Audit | CloudTrail trail with log file validation | API call auditing with integrity verification |
+| **AU-3, AU-9** Audit Storage | S3 audit bucket with versioning and public access block | Tamper-resistant log storage, no anonymous access |
+| **SC-7** Boundary Protection | VPC, private subnets, security group (TLS-only), S3 + DynamoDB VPC endpoints | No public subnets, all traffic within VPC boundary |
+| **SC-12, SC-13** Cryptographic Protection | KMS key with automatic rotation | Encryption at rest with key rotation enabled |
 
 ## GitHub Actions Workflows
 
 - [terraform-plan.yml](.github/workflows/terraform-plan.yml) — prod (main branch, approval gate)
 - [terraform-dev.yml](.github/workflows/terraform-dev.yml) — dev (dev branch, auto-apply)
+
+## Notes
+
+- The self-hosted runner auto-generates registration tokens from `GITHUB_PAT` — no manual token refresh required
+- Runner image includes Node.js 24 (required for `actions/checkout@v6` and `hashicorp/setup-terraform@v4`)
+- Terraform provider credentials are hardcoded test values (safe for local dev only; use Vault or env vars for real environments)
