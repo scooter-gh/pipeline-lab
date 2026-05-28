@@ -4,16 +4,17 @@ export
 COMPOSE = docker compose
 GITHUB_API = https://api.github.com
 
-.PHONY: up down destroy status logs help
+.PHONY: up down destroy status logs ui help
 
 help:
 	@echo ""
 	@echo "pipeline-lab targets:"
-	@echo "  make up       Start all containers (MiniStack + runner)"
+	@echo "  make up       Start all containers (MiniStack + runner + UI)"
 	@echo "  make down     Stop containers, preserve state"
 	@echo "  make destroy  Deregister runner, remove containers + volumes + state"
 	@echo "  make status   Show running container status"
 	@echo "  make logs     Tail all container logs"
+	@echo "  make ui       Open MiniStack dashboard in browser"
 	@echo ""
 
 up:
@@ -56,3 +57,6 @@ status:
 
 logs:
 	$(COMPOSE) logs -f
+
+ui:
+	xdg-open http://localhost:8080
