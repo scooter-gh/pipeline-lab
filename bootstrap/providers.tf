@@ -17,14 +17,6 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    cloudtrail     = var.ministack_endpoint
-    dynamodb       = var.ministack_endpoint
-    ec2            = var.ministack_endpoint
-    iam            = var.ministack_endpoint
-    kms            = var.ministack_endpoint
-    logs           = var.ministack_endpoint
-    s3             = var.ministack_endpoint
-    secretsmanager = var.ministack_endpoint
-    sts            = var.ministack_endpoint
+    s3 = var.ministack_endpoint
   }
 }

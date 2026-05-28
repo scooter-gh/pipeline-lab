@@ -19,43 +19,48 @@ cp .env.template .env
 # 2. Start all containers
 make up
 
-# 3. Push to main to trigger the pipeline
-git push
+# 3. Bootstrap tfstate buckets in both MiniStack instances
+make bootstrap
+
+# 4. Push to dev branch to deploy to dev MiniStack
+git checkout -b dev
+git push -u origin dev
 ```
 
 ## Makefile Targets
 
 | Target | Description |
 |--------|-------------|
-| `make up` | Start all containers (MiniStack + runner + UI) |
+| `make up` | Start all containers (prod + dev MiniStack, runner, UIs) |
 | `make down` | Stop containers, preserve state |
+| `make bootstrap` | Create tfstate buckets in both MiniStack instances |
 | `make destroy` | Deregister runner, remove containers + volumes + state |
 | `make status` | Show running container status |
 | `make logs` | Tail all container logs |
-| `make ui` | Open MiniStack dashboard in browser |
+| `make ui` | Open prod MiniStack dashboard (localhost:8080) |
+| `make ui-dev` | Open dev MiniStack dashboard (localhost:8081) |
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                        Docker Host                           │
-│                                                              │
-│  ┌─────────────────┐    ┌──────────────────────┐            │
-│  │   MiniStack      │    │   GitHub Runner       │            │
-│  │   (AWS compat)   │◀───│   (self-hosted)       │            │
-│  │   :4566          │    │   Runs Terraform      │            │
-│  └────────┬─────────┘    └──────────┬───────────┘            │
-│           │                         │                        │
-│           │   pipeline-net (bridge)  │                        │
-│           │◀────────────────────────▶│                        │
-│                                                              │
-│  ┌─────────────────┐    ┌──────────────────────┐             │
-│  │ Host :4566      │    │  StackPort UI        │             │
-│  │ MiniStack API   │    │  :8080 (dashboard)   │             │
-│  └─────────────────┘    └──────────────────────┘             │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                          Docker Host                             │
+│                                                                  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐ │
+│  │  MiniStack prod  │  │  MiniStack dev   │  │ GitHub Runner  │ │
+│  │  :4566           │  │  :4567→4566      │  │ (self-hosted)  │ │
+│  └────────┬────────┘  └────────┬────────┘  └───────┬────────┘ │
+│           │                    │                    │           │
+│           │   pipeline-net (bridge)                 │           │
+│           │◀────────────────────▶◀──────────────────▶           │
+│                                                                  │
+│  ┌─────────────────┐  ┌─────────────────┐                       │
+│  │ StackPort prod  │  │ StackPort dev   │                       │
+│  │ :8080           │  │ :8081           │                       │
+│  └─────────────────┘  └─────────────────┘                       │
+└──────────────────────────────────────────────────────────────────┘
         │                              ▲
-        │  Push to main                │  Polls for jobs
+        │  Push to dev or main        │  Polls for jobs
         ▼                              │
    ┌──────────┐              ┌──────────────────┐
    │ GitHub   │              │ GitHub Actions    │
@@ -63,15 +68,20 @@ git push
    └──────────┘              └──────────────────┘
 ```
 
-The GitHub Actions workflow (`.github/workflows/terraform-plan.yml`) triggers on pushes to `main`. The self-hosted runner executes Terraform inside the Docker network, reaching MiniStack via the `ministack` service hostname. MiniStack emulates S3, DynamoDB, IAM, STS, KMS, CloudTrail, EC2, CloudWatch Logs, Secrets Manager, and more.
+- **`dev` branch** → auto plan + apply against `ministack-dev:4566`
+- **`main` branch** → plan, then manual approval gate, then apply against `ministack:4566` (prod)
+
+State is isolated: dev state in `dev/terraform.tfstate`, prod state in `prod/terraform.tfstate`, both stored in the `pipeline-lab-tfstate` S3 bucket within their respective MiniStack instance.
+
+MiniStack emulates S3, DynamoDB, IAM, STS, KMS, CloudTrail, EC2, CloudWatch Logs, Secrets Manager, and more.
 
 ## Phase I Scope
 
 - Credentials are hardcoded in Terraform provider config (test keys only, safe for local dev)
 - Terraform resources: VPC, private subnets, security group, S3 + DynamoDB VPC endpoints, KMS key, IAM role with permission boundary, S3 audit bucket with versioning + public access block, CloudTrail trail
 - Vault integration for secrets management is planned for Phase II
-- State is stored locally in Terraform default (no remote backend yet)
 
-## GitHub Actions Workflow
+## GitHub Actions Workflows
 
-See [terraform-plan.yml](.github/workflows/terraform-plan.yml) for the pipeline definition.
+- [terraform-plan.yml](.github/workflows/terraform-plan.yml) — prod (main branch, approval gate)
+- [terraform-dev.yml](.github/workflows/terraform-dev.yml) — dev (dev branch, auto-apply)
