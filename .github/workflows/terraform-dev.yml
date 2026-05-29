@@ -51,10 +51,10 @@ jobs:
       - name: Configure kubeconfig
         working-directory: ${{ github.workspace }}
         run: |
-          export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
-          SERVER_IP=$(docker inspect k3d-pipeline-lab-server-0 --format='{{json .NetworkSettings.Networks}}' | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('pipeline-lab_pipeline-net',{}).get('IPAddress',''))")
-          sed -i "s|https://0.0.0.0:[0-9]*|https://${SERVER_IP}:6443|" $KUBECONFIG
-          echo "KUBECONFIG=$KUBECONFIG" >> $GITHUB_ENV
+          mkdir -p ~/.kube
+          k3d kubeconfig write pipeline-lab --output ~/.kube/config --overwrite
+          sed -i "s|https://0.0.0.0:[0-9]*|https://k3d-pipeline-lab-serverlb:6443|" ~/.kube/config
+          kubectl cluster-info
           kubectl get nodes
 
       - name: Build container images
@@ -78,12 +78,18 @@ jobs:
       - name: Wait for deployments
         working-directory: ${{ github.workspace }}
         run: |
+          sleep 10
           kubectl wait --for=condition=available deployment --all -n vote-app --timeout=180s
 
       - name: Debug pod status on failure
         if: failure()
         working-directory: ${{ github.workspace }}
         run: |
+          mkdir -p ~/.kube
+          k3d kubeconfig write pipeline-lab --output ~/.kube/config --overwrite 2>/dev/null || true
+          sed -i "s|https://0.0.0.0:[0-9]*|https://k3d-pipeline-lab-serverlb:6443|" ~/.kube/config 2>/dev/null || true
+          echo "=== Nodes ==="
+          kubectl get nodes || true
           echo "=== Pods ==="
           kubectl get pods -n vote-app -o wide || true
           echo "=== Events ==="

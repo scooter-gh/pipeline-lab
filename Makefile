@@ -99,7 +99,7 @@ k8s-up:
 	@echo "Creating k3d cluster '$(K3D_CLUSTER)'..."
 	$(COMPOSE) exec github-runner k3d cluster create $(K3D_CLUSTER) --agents 1 -p "80:80@loadbalancer" --wait --network pipeline-lab_pipeline-net
 	@echo "Configuring kubeconfig..."
-	$(COMPOSE) exec github-runner sh -c \"export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)); SERVER_IP=\$$(docker inspect k3d-$(K3D_CLUSTER)-server-0 --format='{{json .NetworkSettings.Networks}}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"pipeline-lab_pipeline-net\",{}).get(\"IPAddress\",\"\"))'); sed -i \"s|https://0.0.0.0:[0-9]*|https://\$$SERVER_IP:6443|\" \$$KUBECONFIG; kubectl get nodes\"
+	$(COMPOSE) exec github-runner sh /home/runner/runner-tools/k3d-kubeconfig.sh $(K3D_CLUSTER)
 	@echo "k3d cluster is ready."
 
 k8s-down:
@@ -108,15 +108,20 @@ k8s-down:
 	@echo "k3d cluster deleted."
 
 k8s-status:
+	@echo "Patching kubeconfig..."
+	$(COMPOSE) exec github-runner sh /home/runner/runner-tools/k3d-kubeconfig.sh $(K3D_CLUSTER)
+	@echo ""
 	@echo "Cluster nodes:"
-	$(COMPOSE) exec github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && kubectl get nodes"
+	$(COMPOSE) exec github-runner kubectl get nodes
 	@echo ""
 	@echo "All pods:"
-	$(COMPOSE) exec github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && kubectl get pods -A"
+	$(COMPOSE) exec github-runner kubectl get pods -A
 
 k8s-cli:
+	@echo "Patching kubeconfig..."
+	$(COMPOSE) exec github-runner sh /home/runner/runner-tools/k3d-kubeconfig.sh $(K3D_CLUSTER)
 	@echo "Opening interactive shell in runner with kubectl access..."
-	$(COMPOSE) exec -it github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && bash"
+	$(COMPOSE) exec -it github-runner bash
 
 images-build:
 	@echo "Building votes image..."
