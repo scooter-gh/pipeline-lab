@@ -99,7 +99,7 @@ k8s-up:
 	@echo "Creating k3d cluster '$(K3D_CLUSTER)'..."
 	$(COMPOSE) exec github-runner k3d cluster create $(K3D_CLUSTER) --agents 1 -p "80:80@loadbalancer" --wait
 	@echo "Waiting for cluster readiness..."
-	$(COMPOSE) exec github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && sleep 5 && kubectl wait --for=condition=Ready nodes --all --timeout=120s"
+	$(COMPOSE) exec github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && for i in \$$(seq 1 30); do kubectl get nodes >/dev/null 2>&1 && break; echo \"Waiting for API server... (\$$i/30)\"; sleep 2; done && kubectl wait --for=condition=Ready nodes --all --timeout=120s"
 	@echo "k3d cluster is ready."
 
 k8s-down:

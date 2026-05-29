@@ -82,7 +82,11 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
-          sleep 5
+          for i in {1..30}; do
+            kubectl get nodes >/dev/null 2>&1 && break
+            echo "Waiting for API server... ($i/30)"
+            sleep 2
+          done
           kubectl wait --for=condition=Ready nodes --all --timeout=120s
 
       - name: Build container images
