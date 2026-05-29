@@ -6,3 +6,7 @@ runner/.runner-data/
 .terraform.lock.hcl
 ministack-data/
 ministack-data-dev/
+__pycache__/
+*.pyc
+*.egg-info/
+*.kubeconfig

@@ -1,0 +1,27 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $.Release.Name }}-votes
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: votes
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "vote-app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: votes
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $.Release.Name }}-results
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: results
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "vote-app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: results

@@ -73,3 +73,56 @@ jobs:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           AWS_DEFAULT_REGION: us-east-1
+
+      - name: Create k3d cluster
+        working-directory: ${{ github.workspace }}
+        run: k3d cluster create pipeline-lab --agents 1 -p "80:80@loadbalancer"
+
+      - name: Wait for cluster readiness
+        working-directory: ${{ github.workspace }}
+        run: |
+          export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
+          kubectl wait --for=condition=Ready nodes --all --timeout=120s
+
+      - name: Build container images
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker build -t votes:latest ./app/votes
+          docker build -t results:latest ./app/results
+
+      - name: Import images into k3d
+        working-directory: ${{ github.workspace }}
+        run: k3d image import votes:latest results:latest -c pipeline-lab
+
+      - name: Deploy with Helm
+        working-directory: ${{ github.workspace }}
+        run: |
+          export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
+          helm upgrade --install vote-app ./charts/vote-app \
+            --create-namespace \
+            -n vote-app \
+            -f ./charts/vote-app/values/prod.yaml
+
+      - name: Wait for deployments
+        working-directory: ${{ github.workspace }}
+        run: |
+          export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
+          kubectl wait --for=condition=available deployment --all -n vote-app --timeout=120s
+
+      - name: Integration test
+        working-directory: ${{ github.workspace }}
+        run: |
+          export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
+          kubectl port-forward -n vote-app svc/vote-app-votes 8080:8080 &
+          PF1=$!
+          kubectl port-forward -n vote-app svc/vote-app-results 8081:8081 &
+          PF2=$!
+          sleep 5
+          curl -sf -X POST http://localhost:8080/vote -H 'Content-Type: application/json' -d '{"option":"a"}'
+          curl -sf http://localhost:8081/results
+          kill $PF1 $PF2
+
+      - name: Destroy k3d cluster
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: k3d cluster delete pipeline-lab

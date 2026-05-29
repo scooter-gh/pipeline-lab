@@ -38,6 +38,12 @@ git push -u origin dev
 | `make logs` | Tail all container logs |
 | `make ui` | Open prod MiniStack dashboard (localhost:8080) |
 | `make ui-dev` | Open dev MiniStack dashboard (localhost:8081) |
+| `make k8s-up` | Create k3d cluster, wait for readiness |
+| `make k8s-down` | Delete k3d cluster |
+| `make k8s-status` | Show cluster nodes and pods |
+| `make k8s-cli` | Interactive shell with kubectl access |
+| `make images-build` | Build votes and results container images |
+| `make images-import` | Import built images into k3d cluster |
 
 ## Architecture
 
@@ -50,7 +56,7 @@ flowchart LR
 
   subgraph Host["Docker Host — pipeline-net"]
     subgraph CICD["CI/CD Layer"]
-      Runner["Self-Hosted Runner<br/>GitHub Actions Executor"]
+      Runner["Self-Hosted Runner<br/>k3d · kubectl · helm"]
     end
 
     subgraph ProdEnv["Production Environment"]
@@ -67,10 +73,22 @@ flowchart LR
     end
   end
 
+  subgraph K8s["Ephemeral k3d Cluster"]
+    Ingress["Traefik Ingress :80"]
+    Votes["Votes Service"]
+    Results["Results Service"]
+    Redis["Redis"]
+  end
+
   GHRepo -- "push triggers" --> GHActions
   GHActions -- "dispatches jobs" --> Runner
   Runner -- "auto plan + apply" --> DevAPI
   Runner -- "plan → approval gate → apply" --> ProdAPI
+  Runner -- "helm install" --> Ingress
+  Ingress --> Votes
+  Ingress --> Results
+  Votes --- Redis
+  Results --- Redis
   ProdAPI --- ProdState
   DevAPI --- DevState
   ProdAPI --- ProdAudit
@@ -78,8 +96,8 @@ flowchart LR
   DevUI -. "visualizes" .-> DevAPI
 ```
 
-- **`dev` branch** → auto plan + apply against `ministack-dev:4566`
-- **`main` branch** → plan, then manual approval gate, then apply against `ministack:4566` (prod)
+- **`dev` branch** → auto plan + apply against `ministack-dev:4566`, then create k3d cluster, deploy vote-app, run integration tests, destroy cluster
+- **`main` branch** → plan, then manual approval gate, then apply against `ministack:4566` (prod), then same k3d lifecycle
 - **StackPort** dashboards provide a web UI to inspect MiniStack resources (S3 buckets, DynamoDB tables, IAM roles, etc.)
 
 State is isolated: dev state in `dev/terraform.tfstate`, prod state in `prod/terraform.tfstate`, both stored in the `pipeline-lab-tfstate` S3 bucket within their respective MiniStack instance.
@@ -102,6 +120,24 @@ Terraform resources map to FedRAMP-adjacent control families:
 
 - [terraform-plan.yml](.github/workflows/terraform-plan.yml) — prod (main branch, approval gate)
 - [terraform-dev.yml](.github/workflows/terraform-dev.yml) — dev (dev branch, auto-apply)
+
+## Kubernetes (k3d)
+
+The pipeline creates an ephemeral k3d cluster per workflow run. Terraform provisions persistent AWS infrastructure via MiniStack; Helm deploys the vote-app microservices onto the ephemeral cluster. The cluster is destroyed after each run.
+
+| Component | Purpose | Lifecycle |
+|-----------|---------|-----------|
+| k3d cluster | Kubernetes runtime | Created/destroyed per pipeline run |
+| Helm chart | vote-app deployment | Ephemeral — installed at run start |
+| Redis | State store for vote counts | emptyDir volume, reset on pod restart |
+| Traefik Ingress | L7 routing to services | Bundled with k3d |
+
+### Vote-app Routes
+
+| Route | Service | Method |
+|-------|---------|--------|
+| `/vote` | votes:8080 | POST |
+| `/results` | results:8081 | GET |
 
 ## Notes
 
