@@ -44,12 +44,13 @@ jobs:
 
       - name: Create k3d cluster
         working-directory: ${{ github.workspace }}
-        run: k3d cluster create pipeline-lab --agents 1 -p "80:80@loadbalancer"
+        run: k3d cluster create pipeline-lab --agents 1 -p "80:80@loadbalancer" --wait
 
       - name: Wait for cluster readiness
         working-directory: ${{ github.workspace }}
         run: |
           export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
+          sleep 5
           kubectl wait --for=condition=Ready nodes --all --timeout=120s
 
       - name: Build container images
