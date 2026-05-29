@@ -3,15 +3,36 @@ votes:
   tag: latest
   replicas: 2
   port: 8080
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
 
 results:
   image: results
   tag: latest
   replicas: 2
   port: 8081
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
 
 redis:
   image: redis
   tag: 7-alpine
   replicas: 1
   port: 6379
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi

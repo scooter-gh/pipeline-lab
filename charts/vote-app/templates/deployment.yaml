@@ -40,6 +40,8 @@ spec:
               port: {{ .Values.votes.port }}
             initialDelaySeconds: 5
             periodSeconds: 10
+          resources:
+            {{- toYaml .Values.votes.resources | nindent 12 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -83,6 +85,8 @@ spec:
               port: {{ .Values.results.port }}
             initialDelaySeconds: 5
             periodSeconds: 10
+          resources:
+            {{- toYaml .Values.results.resources | nindent 12 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -122,6 +126,8 @@ spec:
               port: {{ .Values.redis.port }}
             initialDelaySeconds: 5
             periodSeconds: 10
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
       volumes:
         - name: redis-data
           emptyDir: {}
