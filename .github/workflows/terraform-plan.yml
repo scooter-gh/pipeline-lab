@@ -68,7 +68,29 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var="ministack_endpoint=http://ministack:4566"
+        run: |
+          terraform apply -auto-approve -var="ministack_endpoint=http://ministack:4566" 2>&1 || {
+            echo "::group::Apply failed — importing pre-existing resources"
+            for iface in \
+              "aws_s3_bucket.lab pipeline-lab-bucket" \
+              "aws_dynamodb_table.lab pipeline-lab-table" \
+              "aws_kms_alias.platform alias/pipeline-lab-platform" \
+              "aws_iam_role.platform_app pipeline-lab-platform-app" \
+              "aws_iam_policy.boundary arn:aws:iam::000000000000:policy/pipeline-lab-permission-boundary" \
+              "aws_iam_role_policy.platform_app_inline pipeline-lab-platform-app:pipeline-lab-platform-app-policy" \
+              "aws_s3_bucket.audit_logs pipeline-lab-audit-logs" \
+              "aws_s3_bucket_versioning.audit_logs pipeline-lab-audit-logs" \
+              "aws_s3_bucket_public_access_block.audit_logs pipeline-lab-audit-logs" \
+              "aws_cloudtrail.platform pipeline-lab-trail"; do
+              ADDR=$(echo "$iface" | cut -d' ' -f1)
+              ID=$(echo "$iface" | cut -d' ' -f2)
+              echo "Importing $ADDR ($ID)..."
+              terraform import -var="ministack_endpoint=http://ministack:4566" "$ADDR" "$ID" 2>&1 || true
+            done
+            echo "::endgroup::"
+            echo "Retrying apply after imports..."
+            terraform apply -auto-approve -var="ministack_endpoint=http://ministack:4566"
+          }
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
