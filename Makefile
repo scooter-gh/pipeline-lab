@@ -97,9 +97,9 @@ ui-dev:
 
 k8s-up:
 	@echo "Creating k3d cluster '$(K3D_CLUSTER)'..."
-	$(COMPOSE) exec github-runner k3d cluster create $(K3D_CLUSTER) --agents 1 -p "80:80@loadbalancer" --wait
-	@echo "Waiting for cluster readiness..."
-	$(COMPOSE) exec github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && for i in \$$(seq 1 30); do kubectl get nodes >/dev/null 2>&1 && break; echo \"Waiting for API server... (\$$i/30)\"; sleep 2; done && kubectl wait --for=condition=Ready nodes --all --timeout=120s"
+	$(COMPOSE) exec github-runner k3d cluster create $(K3D_CLUSTER) --agents 1 -p "80:80@loadbalancer" --wait --network pipeline-lab_pipeline-net
+	@echo "Configuring kubeconfig..."
+	$(COMPOSE) exec github-runner sh -c \"export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)); SERVER_IP=\$$(docker inspect k3d-$(K3D_CLUSTER)-server-0 --format='{{json .NetworkSettings.Networks}}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"pipeline-lab_pipeline-net\",{}).get(\"IPAddress\",\"\"))'); sed -i \"s|https://0.0.0.0:[0-9]*|https://\$$SERVER_IP:6443|\" \$$KUBECONFIG; kubectl get nodes\"
 	@echo "k3d cluster is ready."
 
 k8s-down:

@@ -44,18 +44,16 @@ jobs:
 
       - name: Create k3d cluster
         working-directory: ${{ github.workspace }}
-        run: k3d cluster create pipeline-lab --agents 1 -p "80:80@loadbalancer" --wait
+        run: k3d cluster create pipeline-lab --agents 1 -p "80:80@loadbalancer" --wait --network pipeline-lab_pipeline-net
 
-      - name: Wait for cluster readiness
+      - name: Configure kubeconfig
         working-directory: ${{ github.workspace }}
         run: |
           export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
-          for i in {1..30}; do
-            kubectl get nodes >/dev/null 2>&1 && break
-            echo "Waiting for API server... ($i/30)"
-            sleep 2
-          done
-          kubectl wait --for=condition=Ready nodes --all --timeout=120s
+          SERVER_IP=$(docker inspect k3d-pipeline-lab-server-0 --format='{{json .NetworkSettings.Networks}}' | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('pipeline-lab_pipeline-net',{}).get('IPAddress',''))")
+          sed -i "s|https://0.0.0.0:[0-9]*|https://${SERVER_IP}:6443|" $KUBECONFIG
+          echo "KUBECONFIG=$KUBECONFIG" >> $GITHUB_ENV
+          kubectl get nodes
 
       - name: Build container images
         working-directory: ${{ github.workspace }}
@@ -70,7 +68,6 @@ jobs:
       - name: Deploy with Helm
         working-directory: ${{ github.workspace }}
         run: |
-          export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
           helm upgrade --install vote-app ./charts/vote-app \
             --create-namespace \
             -n vote-app \
@@ -79,13 +76,11 @@ jobs:
       - name: Wait for deployments
         working-directory: ${{ github.workspace }}
         run: |
-          export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
           kubectl wait --for=condition=available deployment --all -n vote-app --timeout=120s
 
       - name: Integration test
         working-directory: ${{ github.workspace }}
         run: |
-          export KUBECONFIG=$(k3d kubeconfig write pipeline-lab)
           kubectl port-forward -n vote-app svc/vote-app-votes 8080:8080 &
           PF1=$!
           kubectl port-forward -n vote-app svc/vote-app-results 8081:8081 &
