@@ -144,3 +144,7 @@ The pipeline creates an ephemeral k3d cluster per workflow run. Terraform provis
 - The self-hosted runner auto-generates registration tokens from `GITHUB_PAT` — no manual token refresh required
 - Runner image includes Node.js 24 (required for `actions/checkout@v6` and `hashicorp/setup-terraform@v4`)
 - Terraform provider credentials are hardcoded test values (safe for local dev only; use Vault or env vars for real environments)
+
+## Manual Operations
+
+For a hands-on kubectl runbook covering pod inspection, log tailing, port-forwarding, scaling, Helm operations, and debugging, see [RUNBOOK.md](RUNBOOK.md).
