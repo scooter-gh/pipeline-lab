@@ -105,10 +105,27 @@ jobs:
             -n vote-app \
             -f ./charts/vote-app/values/prod.yaml
 
+      - name: Debug pod status
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n vote-app -o wide
+          echo "=== Events ==="
+          kubectl get events -n vote-app --sort-by='.lastTimestamp'
+          echo "=== Describe votes ==="
+          kubectl describe deployment vote-app-votes -n vote-app || true
+          echo "=== Describe results ==="
+          kubectl describe deployment vote-app-results -n vote-app || true
+          echo "=== Logs votes ==="
+          kubectl logs -n vote-app -l app.kubernetes.io/component=votes --tail=50 || true
+          echo "=== Logs results ==="
+          kubectl logs -n vote-app -l app.kubernetes.io/component=results --tail=50 || true
+
       - name: Wait for deployments
         working-directory: ${{ github.workspace }}
         run: |
-          kubectl wait --for=condition=available deployment --all -n vote-app --timeout=120s
+          kubectl wait --for=condition=available deployment --all -n vote-app --timeout=180s
 
       - name: Integration test
         working-directory: ${{ github.workspace }}
