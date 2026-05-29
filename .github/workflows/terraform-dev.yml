@@ -44,7 +44,9 @@ jobs:
 
       - name: Create k3d cluster
         working-directory: ${{ github.workspace }}
-        run: k3d cluster create pipeline-lab --agents 1 -p "80:80@loadbalancer" --wait --network pipeline-lab_pipeline-net
+        run: |
+          k3d cluster delete pipeline-lab 2>/dev/null || true
+          k3d cluster create pipeline-lab --agents 1 -p "80:80@loadbalancer" --wait --network pipeline-lab_pipeline-net
 
       - name: Configure kubeconfig
         working-directory: ${{ github.workspace }}
@@ -73,14 +75,19 @@ jobs:
             -n vote-app \
             -f ./charts/vote-app/values/dev.yaml
 
-      - name: Debug pod status
-        if: always()
+      - name: Wait for deployments
+        working-directory: ${{ github.workspace }}
+        run: |
+          kubectl wait --for=condition=available deployment --all -n vote-app --timeout=180s
+
+      - name: Debug pod status on failure
+        if: failure()
         working-directory: ${{ github.workspace }}
         run: |
           echo "=== Pods ==="
-          kubectl get pods -n vote-app -o wide
+          kubectl get pods -n vote-app -o wide || true
           echo "=== Events ==="
-          kubectl get events -n vote-app --sort-by='.lastTimestamp'
+          kubectl get events -n vote-app --sort-by='.lastTimestamp' || true
           echo "=== Describe votes ==="
           kubectl describe deployment vote-app-votes -n vote-app || true
           echo "=== Describe results ==="
@@ -89,11 +96,6 @@ jobs:
           kubectl logs -n vote-app -l app.kubernetes.io/component=votes --tail=50 || true
           echo "=== Logs results ==="
           kubectl logs -n vote-app -l app.kubernetes.io/component=results --tail=50 || true
-
-      - name: Wait for deployments
-        working-directory: ${{ github.workspace }}
-        run: |
-          kubectl wait --for=condition=available deployment --all -n vote-app --timeout=180s
 
       - name: Integration test
         working-directory: ${{ github.workspace }}
