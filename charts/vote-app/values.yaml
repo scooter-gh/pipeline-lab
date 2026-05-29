@@ -1,0 +1,17 @@
+votes:
+  image: votes
+  tag: latest
+  replicas: 2
+  port: 8080
+
+results:
+  image: results
+  tag: latest
+  replicas: 2
+  port: 8081
+
+redis:
+  image: redis
+  tag: 7-alpine
+  replicas: 1
+  port: 6379

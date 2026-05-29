@@ -1,0 +1,8 @@
+votes:
+  replicas: 1
+
+results:
+  replicas: 1
+
+redis:
+  replicas: 1

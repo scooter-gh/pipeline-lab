@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-votes
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: votes
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "vote-app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: votes
+  ports:
+    - port: {{ .Values.votes.port }}
+      targetPort: {{ .Values.votes.port }}
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-results
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: results
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "vote-app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: results
+  ports:
+    - port: {{ .Values.results.port }}
+      targetPort: {{ .Values.results.port }}
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "vote-app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+  ports:
+    - port: {{ .Values.redis.port }}
+      targetPort: {{ .Values.redis.port }}
+      protocol: TCP

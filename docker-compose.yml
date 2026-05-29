@@ -81,6 +81,7 @@ services:
       DISABLE_AUTO_UPDATE: "true"
     volumes:
       - ./runner/.runner-data:/home/runner/.runner-data
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - pipeline-net
 

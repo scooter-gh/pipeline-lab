@@ -5,20 +5,28 @@ COMPOSE = docker compose
 GITHUB_API = https://api.github.com
 TF_IMAGE = hashicorp/terraform:1.9
 TF_NET = pipeline-lab_pipeline-net
+K3D_CLUSTER = pipeline-lab
+K8S_NAMESPACE = vote-app
 
-.PHONY: up down destroy status logs ui ui-dev bootstrap help
+.PHONY: up down destroy status logs ui ui-dev bootstrap help k8s-up k8s-down k8s-status k8s-cli images-build images-import
 
 help:
 	@echo ""
 	@echo "pipeline-lab targets:"
-	@echo "  make up         Start all containers (prod + dev MiniStack, runner, UIs)"
-	@echo "  make down       Stop containers, preserve state"
-	@echo "  make destroy    Deregister runner, remove containers + volumes + state"
-	@echo "  make bootstrap  Create tfstate buckets in both MiniStack instances"
-	@echo "  make status     Show running container status"
-	@echo "  make logs        Tail all container logs"
-	@echo "  make ui         Open prod MiniStack dashboard in browser"
-	@echo "  make ui-dev     Open dev MiniStack dashboard in browser"
+	@echo "  make up           Start all containers (prod + dev MiniStack, runner, UIs)"
+	@echo "  make down         Stop containers, preserve state"
+	@echo "  make destroy      Deregister runner, remove containers + volumes + state"
+	@echo "  make bootstrap    Create tfstate buckets in both MiniStack instances"
+	@echo "  make status       Show running container status"
+	@echo "  make logs         Tail all container logs"
+	@echo "  make ui           Open prod MiniStack dashboard in browser"
+	@echo "  make ui-dev       Open dev MiniStack dashboard in browser"
+	@echo "  make k8s-up       Create k3d cluster, wait for readiness"
+	@echo "  make k8s-down     Delete k3d cluster"
+	@echo "  make k8s-status   Show cluster nodes and pods"
+	@echo "  make k8s-cli      Interactive shell with kubectl access"
+	@echo "  make images-build Build votes and results container images"
+	@echo "  make images-import Import built images into k3d cluster"
 	@echo ""
 
 up:
@@ -48,6 +56,8 @@ destroy:
 	else \
 		echo "No runner found to deregister (may already be removed)."; \
 	fi
+	@echo "Deleting k3d cluster (if exists)..."
+	-$(COMPOSE) exec github-runner k3d cluster delete $(K3D_CLUSTER) 2>/dev/null || true
 	@echo "Tearing down containers and volumes..."
 	$(COMPOSE) down -v --remove-orphans
 	@echo "Removing MiniStack state..."
@@ -84,3 +94,36 @@ ui:
 
 ui-dev:
 	xdg-open http://localhost:8081
+
+k8s-up:
+	@echo "Creating k3d cluster '$(K3D_CLUSTER)'..."
+	$(COMPOSE) exec github-runner k3d cluster create $(K3D_CLUSTER) --agents 1 -p "80:80@loadbalancer" --wait --network pipeline-lab_pipeline-net
+	@echo "Configuring kubeconfig..."
+	$(COMPOSE) exec github-runner sh -c \"export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)); SERVER_IP=\$$(docker inspect k3d-$(K3D_CLUSTER)-server-0 --format='{{json .NetworkSettings.Networks}}' | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"pipeline-lab_pipeline-net\",{}).get(\"IPAddress\",\"\"))'); sed -i \"s|https://0.0.0.0:[0-9]*|https://\$$SERVER_IP:6443|\" \$$KUBECONFIG; kubectl get nodes\"
+	@echo "k3d cluster is ready."
+
+k8s-down:
+	@echo "Deleting k3d cluster '$(K3D_CLUSTER)'..."
+	$(COMPOSE) exec github-runner k3d cluster delete $(K3D_CLUSTER) || true
+	@echo "k3d cluster deleted."
+
+k8s-status:
+	@echo "Cluster nodes:"
+	$(COMPOSE) exec github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && kubectl get nodes"
+	@echo ""
+	@echo "All pods:"
+	$(COMPOSE) exec github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && kubectl get pods -A"
+
+k8s-cli:
+	@echo "Opening interactive shell in runner with kubectl access..."
+	$(COMPOSE) exec -it github-runner sh -c "export KUBECONFIG=\$$(k3d kubeconfig write $(K3D_CLUSTER)) && bash"
+
+images-build:
+	@echo "Building votes image..."
+	$(COMPOSE) exec github-runner docker build -t votes:latest ./app/votes
+	@echo "Building results image..."
+	$(COMPOSE) exec github-runner docker build -t results:latest ./app/results
+
+images-import:
+	@echo "Importing images into k3d cluster..."
+	$(COMPOSE) exec github-runner k3d image import votes:latest results:latest -c $(K3D_CLUSTER)

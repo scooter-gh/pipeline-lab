@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-votes
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: votes
+spec:
+  replicas: {{ .Values.votes.replicas }}
+  selector:
+    matchLabels:
+      {{- include "vote-app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: votes
+  template:
+    metadata:
+      labels:
+        {{- include "vote-app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: votes
+    spec:
+      containers:
+        - name: votes
+          image: {{ .Values.votes.image }}:{{ .Values.votes.tag }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ .Values.votes.port }}
+          env:
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.votes.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.votes.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-results
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: results
+spec:
+  replicas: {{ .Values.results.replicas }}
+  selector:
+    matchLabels:
+      {{- include "vote-app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: results
+  template:
+    metadata:
+      labels:
+        {{- include "vote-app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: results
+    spec:
+      containers:
+        - name: results
+          image: {{ .Values.results.image }}:{{ .Values.results.tag }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ .Values.results.port }}
+          env:
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.results.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.results.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-redis
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  replicas: {{ .Values.redis.replicas }}
+  selector:
+    matchLabels:
+      {{- include "vote-app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "vote-app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}:{{ .Values.redis.tag }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ .Values.redis.port }}
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.redis.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.redis.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: redis-data
+          emptyDir: {}
