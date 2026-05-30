@@ -51,6 +51,12 @@ services:
       AWS_SECRET_ACCESS_KEY: test
     networks:
       - pipeline-net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   ministack-ui-dev:
     image: davireis/stackport:latest
@@ -66,6 +72,12 @@ services:
       AWS_SECRET_ACCESS_KEY: test
     networks:
       - pipeline-net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   github-runner:
     build: ./runner
@@ -85,6 +97,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - pipeline-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "test -f /actions-runner/.runner -a -d /proc/1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 networks:
   pipeline-net:
